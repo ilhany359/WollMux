@@ -51,6 +51,9 @@ import de.muenchen.allg.afid.UNO;
 import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractActionListener;
 import de.muenchen.allg.itd51.wollmux.core.parser.ConfigThingy;
 import de.muenchen.allg.itd51.wollmux.document.TextDocumentController;
+import de.muenchen.allg.itd51.wollmux.dialog.trafo.GenderTrafoModel;
+
+import de.muenchen.allg.itd51.wollmux.core.exceptions.UnavailableException;
 
 /**
  * Erlaubt die Bearbeitung der Funktion eines Gender-Feldes.
@@ -66,10 +69,13 @@ public class GenderDialog
   private XDialog dialog;
 
   private TextDocumentController documentController;
+  
+  private GenderTrafoModel model;
 
-  public GenderDialog(List<String> fieldNames, TextDocumentController documentController)
+  public GenderDialog(List<String> fieldNames, TextDocumentController documentController, GenderTrafoModel model)
   {
     this.documentController = documentController;
+    this.model = model;
 
     HashSet<String> uniqueFieldNames = new HashSet<>(fieldNames);
     List<String> sortedNames = new ArrayList<>(uniqueFieldNames);
@@ -114,53 +120,21 @@ public class GenderDialog
   private AbstractActionListener btnAbortActionListener = event -> dialog.endExecute();
 
   private AbstractActionListener btnOKActionListener = event -> {
-    ConfigThingy conf = generateGenderTrafoConf(
-        UNO.XTextComponent(controlContainer.getControl("cbSerienbrieffeld")).getText(),
-        UNO.XTextComponent(controlContainer.getControl("txtMale")).getText(),
-        UNO.XTextComponent(controlContainer.getControl("txtFemale")).getText(),
-        UNO.XTextComponent(controlContainer.getControl("txtOthers")).getText());
-    documentController.replaceSelectionWithTrafoField(conf, "Gender");
+    ConfigThingy conf = model.generateGenderTrafoConf();
+    try
+    {
+      if (model.getFunctionName() == null)
+      {
+        documentController.replaceSelectionWithTrafoField(conf, "Gender");
+      } else
+      {
+        documentController.setTrafo(model.getFunctionName(), conf);
+      }
+    } catch ( UnavailableException ex)
+    {
+      LOGGER.debug("", ex);
+    }
+     
     dialog.endExecute();
   };
-
-  /**
-   * Erzeugt ein ConfigThingy mit dem Aufbau BIND(FUNCTION "Gender" SET("Anrede", VALUE
-   * "<anredeFieldId>") SET("Falls_Anrede_HerrN", "<textHerr>") SET("Falls_Anrede_Frau",
-   * "<textFrau>") SET("Falls_sonstige_Anrede", "<textSonst>"))
-   *
-   * @param anredeId
-   *          Id des geschlechtsbestimmenden Feldes
-   * @param textHerr
-   *          Text für Herr
-   * @param textFrau
-   *          Text für Frau
-   * @param textSonst
-   *          Text für sonstige Anreden
-   */
-  public static ConfigThingy generateGenderTrafoConf(String anredeId, String textHerr,
-      String textFrau, String textSonst)
-  {
-    ConfigThingy conf = new ConfigThingy("Func");
-    ConfigThingy bind = new ConfigThingy("BIND");
-    conf.addChild(bind);
-    bind.add("FUNCTION").add("Gender");
-
-    ConfigThingy setAnrede = bind.add("SET");
-    setAnrede.add("Anrede");
-    setAnrede.add("VALUE").add(anredeId);
-
-    ConfigThingy setHerr = bind.add("SET");
-    setHerr.add("Falls_Anrede_HerrN");
-    setHerr.add(textHerr);
-
-    ConfigThingy setFrau = bind.add("SET");
-    setFrau.add("Falls_Anrede_Frau");
-    setFrau.add(textFrau);
-
-    ConfigThingy setSonst = bind.add("SET");
-    setSonst.add("Falls_sonstige_Anrede");
-    setSonst.add(textSonst);
-
-    return conf;
-  }
 }

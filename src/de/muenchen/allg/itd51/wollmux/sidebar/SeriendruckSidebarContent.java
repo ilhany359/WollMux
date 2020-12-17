@@ -46,6 +46,7 @@ import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractCloseListener;
 import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractItemListener;
 import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractTextListener;
 import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractWindowListener;
+import de.muenchen.allg.itd51.wollmux.core.parser.ConfigThingy;
 import de.muenchen.allg.itd51.wollmux.dialog.AbstractNotifier;
 import de.muenchen.allg.itd51.wollmux.dialog.mailmerge.AdjustFields;
 import de.muenchen.allg.itd51.wollmux.dialog.mailmerge.CalcModel;
@@ -58,7 +59,9 @@ import de.muenchen.allg.itd51.wollmux.dialog.mailmerge.MailMergeNew;
 import de.muenchen.allg.itd51.wollmux.dialog.mailmerge.MailmergeWizardController;
 import de.muenchen.allg.itd51.wollmux.dialog.mailmerge.SpecialField;
 import de.muenchen.allg.itd51.wollmux.dialog.trafo.GenderDialog;
+import de.muenchen.allg.itd51.wollmux.dialog.trafo.GenderTrafoModel;
 import de.muenchen.allg.itd51.wollmux.dialog.trafo.IfThenElseDialog;
+import de.muenchen.allg.itd51.wollmux.dialog.trafo.IfThenElseModel;
 import de.muenchen.allg.itd51.wollmux.document.DocumentManager;
 import de.muenchen.allg.itd51.wollmux.document.TextDocumentController;
 import de.muenchen.allg.itd51.wollmux.event.WollMuxEventHandler;
@@ -310,17 +313,22 @@ public class SeriendruckSidebarContent extends ComponentBase implements XToolPan
       @Override
       public void itemStateChanged(ItemEvent event)
       {
+    	ConfigThingy currentTrafo;
         switch (event.Selected)
         {
         case 0:
           break;
 
         case 1:
-          new GenderDialog(mailMerge.getDs().getColumnNames(), textDocumentController);
+          currentTrafo = textDocumentController.getModel().getFormFieldTrafoFromSelection();
+          GenderTrafoModel modelGender = new GenderTrafoModel(currentTrafo);
+          new GenderDialog(mailMerge.getDs().getColumnNames(), textDocumentController, modelGender);
           break;
 
         case 2:
-          new IfThenElseDialog(mailMerge.getDs().getColumnNames(), textDocumentController);
+          currentTrafo = textDocumentController.getModel().getFormFieldTrafoFromSelection();
+          IfThenElseModel modelIfTheElse = new IfThenElseModel(currentTrafo);          
+          new IfThenElseDialog(mailMerge.getDs().getColumnNames(), textDocumentController, modelIfTheElse);
           break;
 
         case 3:

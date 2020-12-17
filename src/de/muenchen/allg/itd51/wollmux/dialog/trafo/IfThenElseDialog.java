@@ -81,6 +81,7 @@ import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractKeyHandler;
 import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractMouseListener;
 import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractSelectionChangeListener;
 import de.muenchen.allg.itd51.wollmux.core.dialog.adapter.AbstractTextListener;
+import de.muenchen.allg.itd51.wollmux.core.exceptions.UnavailableException;
 import de.muenchen.allg.itd51.wollmux.core.parser.ConfigThingy;
 import de.muenchen.allg.itd51.wollmux.document.TextDocumentController;
 
@@ -148,10 +149,13 @@ public class IfThenElseDialog
 
   private int firstY;
   private int lastY;
+  
+  private IfThenElseModel model;
 
-  public IfThenElseDialog(List<String> fieldNames, TextDocumentController documentController)
+  public IfThenElseDialog(List<String> fieldNames, TextDocumentController documentController, IfThenElseModel model)
   {
     this.documentController = documentController;
+    this.model = model;
     if (fieldNames == null || fieldNames.isEmpty())
       throw new IllegalArgumentException();
 
@@ -221,7 +225,7 @@ public class IfThenElseDialog
 
       cbComparator = UNO.XComboBox(controlContainer.getControl("cbComparator"));
       Arrays.stream(TestType.values()).forEach(
-          item -> cbComparator.addItem(item.label, (short) (cbComparator.getItemCount() + 1)));
+          item -> cbComparator.addItem(item.getLabel(), (short) (cbComparator.getItemCount() + 1)));
       // default wert setzen
       UNO.XTextComponent(cbComparator).setText(cbComparator.getItem((short) 0));
       cbComparator.addItemListener(comparatorItemListener);
@@ -273,8 +277,20 @@ public class IfThenElseDialog
   private AbstractActionListener removeConditionBtnActionListener = event -> removeNode();
 
   private AbstractActionListener okBtnActionListener = event -> {
-    ConfigThingy resultConf = buildTrafo(rootNode, new ConfigThingy("Func"));
-    documentController.replaceSelectionWithTrafoField(resultConf, "Wenn...Dann...Sonst");
+    ConfigThingy resultConf = model.create();
+    
+    try
+    {
+      if (model.getName() == null)
+      {
+        documentController.replaceSelectionWithTrafoField(resultConf, "Wenn...Dann...Sonst");
+      } else {
+        documentController.setTrafo(model.getName(), resultConf);
+      }
+    } catch ( UnavailableException ex)
+    {
+      LOGGER.debug("", ex);
+    }
     dialog.endExecute();
   };
 
@@ -553,7 +569,7 @@ public class IfThenElseDialog
     data.add(id);
     data.add(cbSerienbrieffeld.getItem((short) 0)); // mailmerge Field
     data.add(""); // Not
-    data.add(TestType.STRCMP.label); // compartor
+    data.add(TestType.STRCMP.getLabel()); // compartor
     data.add(""); // value
 
     ifNode.setDataValue(data.toArray());
@@ -632,158 +648,6 @@ public class IfThenElseDialog
           .setDisplayValue(data[0] + " " + data[2] + " " + data[3] + " " + data[4] + " " + data[5]);
     }
   };
-
-  private ConfigThingy buildTrafo(XTreeNode currentNode, ConfigThingy rootConfig)
-  {
-
-    if (currentNode.getChildCount() < 1)
-      return new ConfigThingy("");
-
-    ConfigThingy currentConfig = rootConfig;
-
-    for (int i = 0; i < currentNode.getChildCount(); i++)
-    {
-      try
-      {
-        XTreeNode currentChildNode = currentNode.getChildAt(i);
-
-        String[] dataChildNode = nodeDataValueToStringArray(
-            UnoRuntime.queryInterface(XMutableTreeNode.class, currentChildNode));
-
-        String conditionType = dataChildNode[0];
-
-        if (WENN.equals(conditionType))
-        {
-          ConfigThingy ifConfig = createIf(dataChildNode);
-          currentConfig.addChild(ifConfig);
-          currentConfig = ifConfig;
-        } else if (DANN.equals(conditionType))
-        {
-          ConfigThingy thenConf = createThenOrElse("THEN", dataChildNode, currentChildNode);
-          currentConfig.addChild(thenConf);
-        } else if (SONST.equals(conditionType))
-        {
-          ConfigThingy elseConf = createThenOrElse("ELSE", dataChildNode, currentChildNode);
-          currentConfig.addChild(elseConf);
-        }
-      } catch (IndexOutOfBoundsException e)
-      {
-        LOGGER.error("", e);
-      }
-    }
-
-    return rootConfig;
-  }
-
-  private ConfigThingy addSTRCMPBlock(ConfigThingy ifConf, String comparator, String value1,
-      String value2)
-  {
-    Optional<TestType> resultTestType = Arrays.stream(TestType.values())
-        .filter(item -> comparator.equals(item.label)).findFirst();
-
-    if (resultTestType.isPresent())
-    {
-      ConfigThingy strCmpConf = ifConf.add(resultTestType.get().func);
-      strCmpConf.add("VALUE").add(value1 == null || value1.isEmpty() ? "" : value1);
-      strCmpConf.add(value2 == null || value2.isEmpty() ? "" : value2);
-
-      return strCmpConf;
-    }
-
-    return null;
-  }
-
-  private ConfigThingy createIf(String[] data)
-  {
-    ConfigThingy conf = new ConfigThingy("IF");
-    if (NOT.equals(data[3]))
-    {
-      ConfigThingy notConf = new ConfigThingy("NOT");
-      addSTRCMPBlock(notConf, data[4], data[2], data[5]);
-      conf.addChild(notConf);
-    } else
-    {
-      addSTRCMPBlock(conf, data[4], data[2], data[5]);
-    }
-    return conf;
-  }
-
-  private ConfigThingy createThenOrElse(String func, String[] data, XTreeNode currentChildNode)
-  {
-    ConfigThingy conf = new ConfigThingy(func);
-
-    if (currentChildNode.getChildCount() > 0)
-      buildTrafo(currentChildNode, conf);
-    else
-    {
-      ConfigThingy catConf = addCAT(data[2]);
-      conf.addChild(catConf);
-    }
-    return conf;
-  }
-
-  private ConfigThingy addCAT(String value)
-  {
-    ConfigThingy catConf = new ConfigThingy("CAT");
-    if (value.isEmpty())
-    {
-      catConf.add(value);
-    } else
-    {
-      boolean finished = false;
-      int index = 0;
-      do
-      {
-        int startIndex = value.indexOf("{{", index);
-        int endIndex = value.indexOf("}}", index);
-        finished = index >= value.length();
-        if (!finished)
-        {
-          if (startIndex > -1 && endIndex > -1)
-          {
-            catConf.add(value.substring(index, startIndex));
-            ConfigThingy valueConf = new ConfigThingy("VALUE");
-            valueConf.add(value.substring(startIndex + 2, endIndex));
-            catConf.addChild(valueConf);
-            index = endIndex + 2;
-          } else
-          {
-            catConf.add(value.substring(index));
-            index = value.length();
-          }
-        }
-      } while (!finished);
-    }
-
-    return catConf;
-  }
-
-  private enum TestType
-  {
-    STRCMP("genau =", "STRCMP"),
-    NUMCMP("numerisch =", "NUMCMP"),
-    LT("numerisch <", "LT"),
-    LE("numerisch <=", "LE"),
-    GT("numerisch >", "GT"),
-    GE("numerisch >=", "GE"),
-    MATCH("regulärer Ausdruck", "MATCH");
-
-    private final String label;
-
-    private final String func;
-
-    private TestType(String label, String func)
-    {
-      this.label = label;
-      this.func = func;
-    }
-
-    @Override
-    public String toString()
-    {
-      return label;
-    }
-  }
 
   private AbstractKeyHandler keyHandler = new AbstractKeyHandler()
   {
